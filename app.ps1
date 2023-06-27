@@ -1,4 +1,4 @@
-
+$LF = "`r`n";
 function Get-FormatedEmailForHandler {
     param (
         [Parameter(Mandatory = $true)]
@@ -10,37 +10,140 @@ function Get-FormatedEmailForHandler {
         [Parameter(Mandatory = $true)]
         [string]$body
     )
-
+    
     $content = ""
+    
+    $content += ("From: {0}$LF" -f $from.Address)
+    $content += ("To: {0}$LF" -f $to.Address)
+    $content += ("Subject: {0}$LF" -f $subject)
+    $content += "$LF"
 
-    $content += ("From: {0}`n" -f $from.Address)
-    $content += ("To: {0}`n" -f $to.Address)
-    $content += ("Subject: {0}`n" -f $subject)
+ 
+    ForEach ($line in $((Convert-HtmlToPlainText -Html $body) -split "$LF")) {
+        if ([string]::IsNullOrEmpty($line)) {
+            continue;
+        }
 
-    $content += $body
-
+        $content += "$line $LF"
+    }
     return $content
 }
 
-# ERROR Messages
-# case response.code.to_i
-#       when 403
-#         warn "Request was denied by your Redmine server. " +
-#              "Make sure that 'WS for incoming emails' is enabled in application settings and that you provided the correct API key."
-#         return 77
-#       when 422
-#         warn "Request was denied by your Redmine server. " +
-#              "Possible reasons: email is sent from an invalid email address or is missing some information."
-#         return 77
-#       when 400..499
-#         warn "Request was denied by your Redmine server (#{response.code})."
-#         return 77
-#       when 500..599
-#         warn "Failed to contact your Redmine server (#{response.code})."
-#         return 75
-#       when 201
-#         debug "Processed successfully"
-#         return 0
-#       else
-#         return 1
+function Get-Thumbprint {
+    param (
+        $StoreName,
+        $CertMerge,
+        $CertPass
+    )
 
+    # Store certificate in certificate store
+    $StoreName = [System.Security.Cryptography.X509Certificates.StoreName]::My 
+    $StoreLocation = [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+    $Store = [System.Security.Cryptography.X509Certificates.X509Store]::new($StoreName, $StoreLocation) 
+    $Flag = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+    $Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertMerge, $CertPass, $Flag)
+    $Store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+    $Store.Add($Certificate)
+    $Store.Close() 
+
+    # Get cert thumbprint
+    $CertValue = [Convert]::ToBase64String($Certificate.GetRawCertData())
+    return  $Certificate.Thumbprint
+}
+
+function Convert-HtmlToPlainText {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [string]$Html
+    )
+
+    Write-Output $([System.Web.HttpUtility]::HtmlDecode($Html) -replace '<br>', $LF -replace '<hr[^>]+>', "$LF-----Original Message-----$LF" -replace '<[^>]+>', '')
+}
+
+if (Get-Module -ListAvailable -Name Microsoft.Graph.Mail) {
+    Write-Host "Module exists"
+} 
+else {
+    Install-Module "Microsoft.Graph.Mail" -RequiredVersion 1.24.0 -Force
+    Install-Module "Microsoft.Graph.Users.Actions" -RequiredVersion 1.24.0 -Force
+}
+
+Import-Module Microsoft.Graph.Mail -RequiredVersion 1.24.0 
+Import-Module Microsoft.Graph.Users.Actions -RequiredVersion 1.24.0 
+
+if (-not (Test-Path -Path ("{0}/conf.json" -f $PSScriptRoot))) {
+    throw "Config File not found";
+    exit;
+}
+
+$config = (Get-Content -Path ("{0}/conf.json" -f $PSScriptRoot) | ConvertFrom-Json)
+
+try {
+    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
+}
+catch {
+    throw "Unable to authenticate";
+    exit;
+}
+
+if (-not (Test-Path -Path ("{0}/temp" -f $PSScriptRoot) -PathType Container)) {
+    New-Item -ItemType Directory -Path ("{0}/temp" -f $PSScriptRoot) | Out-Null
+}
+Remove-Item -Path ('{0}/temp/*' -f $PSScriptRoot)
+
+$EmailFolders = Get-MgUserMailFolder -UserId $config.redmineMailAddress -Top 100
+$sourceFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'Inbox' -EQ).Id
+$notParsedFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'failed' -EQ).Id
+$ParsedFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'read' -EQ).Id
+$ErrorFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'error' -EQ).Id
+
+while ($true) {
+    $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
+    foreach ($Email in $Emails) {  
+        if ($Email.Subject -notlike "*#8899*" ) {
+            continue;
+        }
+
+        $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
+        if ([string]::IsNullOrEmpty($RedmineIssueID)) {
+            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $notParsedFolderID
+            continue;
+        }
+
+        $MimeMessagePath = ('{0}/temp/{1}' -f $PSScriptRoot, $Email.Id)
+        try {
+            Get-MgUserMessageContent -UserId $config.redmineMailAddress -MessageId $Email.Id -OutFile $MimeMessagePath
+            
+            $Headers = @{ 
+                'User-Agent' = 'Redmine mail handler/0.2.3' 
+            }
+            $req = Invoke-WebRequest -Uri ('{0}/mail_handler/' -f $config.redmineRootUrl) -Method POST -Headers $Headers -Form @{
+                key   = $config.redmineWSKey
+                email = (Get-Content -Path $MimeMessagePath -Raw)
+            }
+                
+            if ($req.StatusCode -ne 200 -and $req.StatusCode -ne 201) {
+                Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+                throw "error"
+            }
+                
+            write-host $Email.From.EmailAddress.Address
+            write-host $Email.Subject
+            write-host $Email.BodyPreview
+
+            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ParsedFolderID
+        }
+        catch {
+            write-host "error" + $_
+        }
+        finally {
+            if (Test-Path -Path $MimeMessagePath) {
+                Remove-Item -Path $MimeMessagePath
+            }
+        }
+    }
+
+    write-host ("Sleeping for {0}s" -f $config.syncIntervalSeconds)
+    Start-Sleep -Seconds $config.syncIntervalSeconds
+}

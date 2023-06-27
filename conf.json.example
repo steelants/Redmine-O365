@@ -1,0 +1,11 @@
+{
+    "azureAppID" :"",
+    "azureTenantID": "",
+    "redmineMailAddress" : "",
+    "redmineRootUrl" : "",
+    "redmineWSKey" : "",
+    "certName":"MS-Graph",
+    "certPath":"/etc/ssl/private/",
+    "certPass":"",
+    "syncIntervalSeconds" : 5
+}

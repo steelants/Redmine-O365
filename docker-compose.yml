@@ -1,0 +1,11 @@
+
+version: "3.8"
+services:
+  email-connector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      -  ./:/app/
+    command: pwsh /app/app.ps1 # instead of ./script.sh
