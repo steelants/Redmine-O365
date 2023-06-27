@@ -98,7 +98,8 @@ $notParsedFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -valu
 $ParsedFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'read' -EQ).Id
 $ErrorFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'error' -EQ).Id
 
-while ($true) {
+$isInError = $false
+while ($isInError -eq $false) {
     $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
     foreach ($Email in $Emails) {  
         if ($Email.Subject -notlike "*#8899*" ) {
@@ -107,7 +108,7 @@ while ($true) {
 
         $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
         if ([string]::IsNullOrEmpty($RedmineIssueID)) {
-            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $notParsedFolderID
+            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
             continue;
         }
 
@@ -118,24 +119,30 @@ while ($true) {
             $Headers = @{ 
                 'User-Agent' = 'Redmine mail handler/0.2.3' 
             }
-            $req = Invoke-WebRequest -Uri ('{0}/mail_handler/' -f $config.redmineRootUrl) -Method POST -Headers $Headers -Form @{
+
+            $Form = @{
                 key   = $config.redmineWSKey
                 email = (Get-Content -Path $MimeMessagePath -Raw)
             }
+
+            $req = Invoke-WebRequest -Uri ('{0}/mail_handler/' -f $config.redmineRootUrl) -Method POST -Headers $Headers -Form $Form
                 
             if ($req.StatusCode -ne 200 -and $req.StatusCode -ne 201) {
-                Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+                Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $notParsedFolderID
                 throw "error"
             }
                 
-            write-host $Email.From.EmailAddress.Address
-            write-host $Email.Subject
-            write-host $Email.BodyPreview
+            write-host ("FROM: {0}" -f $Email.From.EmailAddress.Address)
+            write-host ("SUBJECT: {0}" -f $Email.Subject)
+            if (-not [string]::IsNullOrEmpty($Email.BodyPreview)) {
+                write-host ("SUBJECT: {0}" -f $Email.BodyPreview)
+            }   
 
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ParsedFolderID
         }
         catch {
             write-host "error" + $_
+            $isInError = $true
         }
         finally {
             if (Test-Path -Path $MimeMessagePath) {
@@ -144,6 +151,8 @@ while ($true) {
         }
     }
 
-    write-host ("Sleeping for {0}s" -f $config.syncIntervalSeconds)
-    Start-Sleep -Seconds $config.syncIntervalSeconds
+    if ($isInError -ne $true){
+        write-host ("Sleeping for {0}s" -f $config.syncIntervalSeconds)
+        Start-Sleep -Seconds $config.syncIntervalSeconds
+    }
 }
