@@ -15,3 +15,13 @@ Thank you for all your help [@Andrew Beam](https://github.com/beam)
 4) Fil in required information to `conf.json.example`
 5) rename `conf.json.example` > `conf.json`
 6) Restart Container `docker compose down && docker compose up -d`
+
+# Azure Scopes (Type Application)
+* AccessReview.Read.All
+* AccessReview.ReadWrite.All
+* AccessReview.ReadWrite.Membership
+* Mail.Read
+* Mail.ReadBasic
+* Mail.ReadWrite
+* User.Read
+
