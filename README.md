@@ -1,6 +1,7 @@
 # REDMINE - O365
 Thank you for all your help [@Andrew Beam](https://github.com/beam)
 
+
 1) First urn `docker compose up`
 2) then Copy newly generated certificate from container `docker cp {CONTAINER ID}:/etc/ssl/private/ .\`
 3) Azure AD (App Registration)
