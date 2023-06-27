@@ -1,4 +1,4 @@
-# REDMINE-O365
+# REDMINE - O365
 Thank you for all your help [@Andrew Beam](https://github.com/beam)
 
 1) First urn `docker compose up`
