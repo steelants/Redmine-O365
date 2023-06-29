@@ -102,9 +102,10 @@ $isInError = $false
 while ($isInError -eq $false) {
     $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
     foreach ($Email in $Emails) {  
-        if ($Email.Subject -notlike "*#8899*" ) {
-            continue;
-        }
+        # #tEMPORARY DEV FILTER
+        # if ($Email.Subject -notlike "*#8899*" ) {
+        #     continue;
+        # }
 
         $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
         if ([string]::IsNullOrEmpty($RedmineIssueID)) {
