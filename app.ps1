@@ -1,4 +1,6 @@
-$LF = "`r`n";
+
+
+
 function Get-FormatedEmailForHandler {
     param (
         [Parameter(Mandatory = $true)]
@@ -61,10 +63,21 @@ function Convert-HtmlToPlainText {
     Write-Output $([System.Web.HttpUtility]::HtmlDecode($Html) -replace '<br>', $LF -replace '<hr[^>]+>', "$LF-----Original Message-----$LF" -replace '<[^>]+>', '')
 }
 
+$LF = "`r`n";
+if (-not (Test-Path -Path ("{0}/logs" -f $PSScriptRoot) -PathType Container)) {
+    New-Item -Path ("{0}/logs" -f $PSScriptRoot) -ItemType Directory
+}
+
+$LogPath = ('{0}/logs/log_{1}.log' -f $PSScriptRoot, (Get-Date -Format "ddMMyyyy"))
+Add-Content -Value ("BOOT: {0}" -f (Get-Date -Format "HH:mm")) -Path $LogPath 
+Write-Host ("BOOT: {0}" -f (Get-Date -Format "HH:mm"))
+
 if (Get-Module -ListAvailable -Name Microsoft.Graph.Mail) {
+    Add-Content -Value "Modules Found!" -Path $LogPath 
     Write-Host "Module exists"
 } 
 else {
+    Add-Content -Value "Modules not Found!" -Path $LogPath 
     Install-Module "Microsoft.Graph.Mail" -RequiredVersion 1.24.0 -Force
     Install-Module "Microsoft.Graph.Users.Actions" -RequiredVersion 1.24.0 -Force
 }
@@ -81,9 +94,11 @@ $config = (Get-Content -Path ("{0}/conf.json" -f $PSScriptRoot) | ConvertFrom-Js
 
 try {
     Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
+    Add-Content -Value "Connected to MS Graph API" -Path $LogPath 
 }
 catch {
     throw "Unable to authenticate";
+    Add-Content -Value "Unable to authenticate to MS Graph API" -Path $LogPath 
     exit;
 }
 
@@ -102,14 +117,15 @@ $isInError = $false
 while ($isInError -eq $false) {
     $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
     foreach ($Email in $Emails) {  
-        # #tEMPORARY DEV FILTER
-        # if ($Email.Subject -notlike "*#8899*" ) {
-        #     continue;
-        # }
+        #tEMPORARY DEV FILTER
+        if ($Email.Subject -notlike "*#8899*" ) {
+            continue;
+        }
 
         $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
         if ([string]::IsNullOrEmpty($RedmineIssueID)) {
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+            Add-Content -Value ("Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath 
             continue;
         }
 
@@ -130,6 +146,7 @@ while ($isInError -eq $false) {
                 
             if ($req.StatusCode -ne 200 -and $req.StatusCode -ne 201) {
                 Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $notParsedFolderID
+                Add-Content -Value ("Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath 
                 throw "error"
             }
                 
@@ -143,6 +160,7 @@ while ($isInError -eq $false) {
         }
         catch {
             write-host "error" + $_
+            Add-Content -Value $_ -Path $LogPath 
             $isInError = $true
         }
         finally {
@@ -152,7 +170,7 @@ while ($isInError -eq $false) {
         }
     }
 
-    if ($isInError -ne $true){
+    if ($isInError -ne $true) {
         write-host ("Sleeping for {0}s" -f $config.syncIntervalSeconds)
         Start-Sleep -Seconds $config.syncIntervalSeconds
     }
