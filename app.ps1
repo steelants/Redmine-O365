@@ -97,8 +97,8 @@ try {
     Add-Content -Value "Connected to MS Graph API" -Path $LogPath 
 }
 catch {
-    throw "Unable to authenticate";
     Add-Content -Value "Unable to authenticate to MS Graph API" -Path $LogPath 
+    throw "Unable to authenticate";
     exit;
 }
 
