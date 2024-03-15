@@ -117,8 +117,9 @@ $isInError = $false
 while ($isInError -eq $false) {
     try {
         $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
-    } catch {
-        write-host "error" + $_
+    }
+    catch {
+        write-host "MS - error" + $_
         Add-Content -Value $_ -Path $LogPath
         $isInError = $true
     }
@@ -132,7 +133,21 @@ while ($isInError -eq $false) {
         $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
         if ([string]::IsNullOrEmpty($RedmineIssueID)) {
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
-            Add-Content -Value ("Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
+            Add-Content -Value ("MS - Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
+            continue;
+        }
+
+        $notAlowedBodyContent = $false
+        foreach ($ignoredBody in $config.ignoedEmailBody) {
+            if($Email.Body -match ("*{0}*" -f $ignoredBody)){
+                $notAlowedBodyContent = $true
+                continue;
+            }
+        }
+
+        if ($notAlowedBodyContent) {
+            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+            Add-Content -Value ("MS - Eamil with subject: {0} contain not aloved body" -f $Email.Subject) -Path $LogPath
             continue;
         }
 
@@ -153,7 +168,7 @@ while ($isInError -eq $false) {
 
             if ($req.StatusCode -ne 200 -and $req.StatusCode -ne 201) {
                 Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $notParsedFolderID
-                Add-Content -Value ("Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
+                Add-Content -Value ("RDM - Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
                 throw "error"
             }
 
@@ -166,8 +181,10 @@ while ($isInError -eq $false) {
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ParsedFolderID
         }
         catch {
-            write-host "error" + $_
+            write-host "RDM - error" + $_
             Add-Content -Value $_ -Path $LogPath
+            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+            Add-Content -Value ("Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
             $isInError = $true
         }
         finally {
@@ -181,4 +198,8 @@ while ($isInError -eq $false) {
         write-host ("Sleeping for {0}s" -f $config.syncIntervalSeconds)
         Start-Sleep -Seconds $config.syncIntervalSeconds
     }
+    else {
+        exit 1
+    }
 }
+

@@ -7,5 +7,6 @@
     "certName":"MS-Graph",
     "certPath":"/etc/ssl/private/",
     "certPass":"",
-    "syncIntervalSeconds" : 5
+    "syncIntervalSeconds" : 5,
+    "ignoedEmailBody" : []
 }

@@ -1,4 +1,3 @@
-
 version: "3.8"
 services:
   email-connector:
@@ -7,5 +6,16 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      -  ./:/app/
+      - ./:/app/
     command: pwsh /app/app.ps1 # instead of ./script.sh
+  # uncomment for chedulet restart
+  # watchdog:
+  #   image: docker:cli
+  #   volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
+  #   command:
+  #     [
+  #       "/bin/sh",
+  #       "-c",
+  #       "while true; do sleep 86400; docker restart [[REPLACE WITH COTNAINER NAME]]; done"
+  #     ]
+  #   restart: unless-stopped
