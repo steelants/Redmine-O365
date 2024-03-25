@@ -176,7 +176,7 @@ while ($isInError -eq $false) {
             write-host ("FROM: {0}" -f $Email.From.EmailAddress.Address)
             write-host ("SUBJECT: {0}" -f $Email.Subject)
             if (-not [string]::IsNullOrEmpty($Email.BodyPreview)) {
-                write-host ("SUBJECT: {0}" -f $Email.BodyPreview)
+                write-host ("BODY: {0}" -f $Email.BodyPreview)
             }
 
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ParsedFolderID
