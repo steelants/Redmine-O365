@@ -116,7 +116,7 @@ $ErrorFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'e
 $isInError = $false
 while ($isInError -eq $false) {
     try {
-        $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
+        $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From, BodyPreview 
     }
     catch {
         write-host "MS - error" + $_
@@ -138,8 +138,9 @@ while ($isInError -eq $false) {
         }
 
         $notAlowedBodyContent = $false
-        foreach ($ignoredBody in $config.ignoedEmailBody) {
-            if($Email.Body -match ("*{0}*" -f $ignoredBody)){
+        foreach ($ignoredBody in $config.ignoedEmailBody) { 
+            if($Email.BodyPreview.toString() -like ("*{0}*" -f $ignoredBody)){
+                write-host ("*{0}*" -f $ignoredBody)
                 $notAlowedBodyContent = $true
                 continue;
             }
