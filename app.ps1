@@ -124,7 +124,7 @@ if (-not (Test-Path -Path ("{0}/conf.json" -f $PSScriptRoot))) {
 $config = (Get-Content -Path ("{0}/conf.json" -f $PSScriptRoot) | ConvertFrom-Json)
 
 try {
-    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint "F652F2D41FB84AB496DA7BD426D191263665BE56"# $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
+    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
     Add-Content -Value "Connected to MS Graph API" -Path $LogPath
 }
 catch {
@@ -147,7 +147,7 @@ $ErrorFolderID = ($EmailFolders | Where-Object -Property 'DisplayName' -value 'e
 $isInError = $false
 while ($isInError -eq $false) {
     try {
-        $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From
+        $Emails = Get-MgUserMailFolderMessage -UserId $config.redmineMailAddress -MailFolderId $sourceFolderID -Filter "IsRead eq false" -Property Subject, Body, From, BodyPreview 
     }
     catch {
         write-host "MS - error" + $_
@@ -223,7 +223,7 @@ while ($isInError -eq $false) {
             write-host ("FROM: {0}" -f $Email.From.EmailAddress.Address)
             write-host ("SUBJECT: {0}" -f $Email.Subject)
             if (-not [string]::IsNullOrEmpty($Email.BodyPreview)) {
-                write-host ("SUBJECT: {0}" -f $Email.BodyPreview)
+                write-host ("BODY: {0}" -f $Email.BodyPreview)
             }
 
             Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ParsedFolderID
