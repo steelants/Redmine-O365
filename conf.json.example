@@ -8,5 +8,6 @@
     "certPath":"/etc/ssl/private/",
     "certPass":"",
     "syncIntervalSeconds" : 5,
-    "ignoedEmailBody" : []
+    "ignoedEmailBody" : [],
+    "allowOverride" : []
 }

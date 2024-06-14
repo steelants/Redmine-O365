@@ -63,6 +63,37 @@ function Convert-HtmlToPlainText {
     Write-Output $([System.Web.HttpUtility]::HtmlDecode($Html) -replace '<br>', $LF -replace '<hr[^>]+>', "$LF-----Original Message-----$LF" -replace '<[^>]+>', '')
 }
 
+function Get-RedmineIssueFields {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$text
+    )
+
+    # Initialize an empty hashtable
+    $hashtable = @{}
+
+    # Use a regular expression to match each line and capture the key and value
+    $regex = [regex] '^(?<key>[^:]+):\s*(?<value>.+)$'
+
+    # Loop through each line of the text
+    foreach ($line in $text -split "`n") {
+        # Break the loop if an empty line is encountered
+        if ($line -match '^\s*$') {
+            break
+        }
+
+        if ($line -match $regex) {
+            $key = $matches['key']
+            $value = $matches['value']
+            # Add the captured key and value to the hashtable
+            $hashtable[$key] = $value
+        }
+    }
+
+    # Output the hashtable
+    $hashtable
+}
+
 $LF = "`r`n";
 if (-not (Test-Path -Path ("{0}/logs" -f $PSScriptRoot) -PathType Container)) {
     New-Item -Path ("{0}/logs" -f $PSScriptRoot) -ItemType Directory
@@ -93,7 +124,7 @@ if (-not (Test-Path -Path ("{0}/conf.json" -f $PSScriptRoot))) {
 $config = (Get-Content -Path ("{0}/conf.json" -f $PSScriptRoot) | ConvertFrom-Json)
 
 try {
-    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
+    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint "F652F2D41FB84AB496DA7BD426D191263665BE56"# $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
     Add-Content -Value "Connected to MS Graph API" -Path $LogPath
 }
 catch {
@@ -139,7 +170,7 @@ while ($isInError -eq $false) {
 
         $notAlowedBodyContent = $false
         foreach ($ignoredBody in $config.ignoedEmailBody) {
-            if($Email.Body -match ("*{0}*" -f $ignoredBody)){
+            if ($Email.Body -match ("*{0}*" -f $ignoredBody)) {
                 $notAlowedBodyContent = $true
                 continue;
             }
@@ -159,9 +190,26 @@ while ($isInError -eq $false) {
                 'User-Agent' = 'Redmine mail handler/0.2.3'
             }
 
+            
             $Form = @{
-                key   = $config.redmineWSKey
-                email = (Get-Content -Path $MimeMessagePath -Raw)
+                key            = $config.redmineWSKey
+                email          = (Get-Content -Path $MimeMessagePath -Raw)
+                allow_override = $config.allowOverride
+            }
+
+            $issue_attributes = @{}
+            if ($config.allowOverride.Length -gt 0) {
+                write-host ("ISSUE FIELD OVERIDE FOUND !!!")
+
+                foreach ($field in $(Get-RedmineIssueFields -text $Email.BodyPreview).GetEnumerator()) {
+                    $request_parameter = $field.Name.ToLower()
+                    if ($request_parameter -in $config.allowOverride) {
+                        $issue_attributes[$request_parameter] = $field.Value
+                        write-host ("{0}={1}" -f $request_parameter, $field.Value)
+                    }
+                }
+
+                $Form['issue'] = $issue_attributes
             }
 
             $req = Invoke-WebRequest -Uri ('{0}/mail_handler/' -f $config.redmineRootUrl) -Method POST -Headers $Headers -Form $Form
