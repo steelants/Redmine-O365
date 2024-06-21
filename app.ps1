@@ -1,6 +1,3 @@
-
-
-
 function Get-FormatedEmailForHandler {
     param (
         [Parameter(Mandatory = $true)]
@@ -170,7 +167,7 @@ while ($isInError -eq $false) {
 
         $notAlowedBodyContent = $false
         foreach ($ignoredBody in $config.ignoedEmailBody) {
-            if ($Email.Body -match ("*{0}*" -f $ignoredBody)) {
+            if ($Email.Body -match ("{0}" -f $ignoredBody)) {
                 $notAlowedBodyContent = $true
                 continue;
             }
@@ -192,24 +189,25 @@ while ($isInError -eq $false) {
 
             
             $Form = @{
-                key            = $config.redmineWSKey
-                email          = (Get-Content -Path $MimeMessagePath -Raw)
-                allow_override = $config.allowOverride
+                key                 = $config.redmineWSKey
+                email               = $((Get-Content -Path $MimeMessagePath -Raw) -replace "/(?<!\r)\n|\r(?!\n)/", "\r\n")
+                allow_override      = $($($config.allowOverride.ToLower() -replace " ", "_") -join ",")
+                no_account_notice   = $config.noAccountNotice
+                no_notification     = $config.noNotification
+                no_permission_check = $config.noPermissionCheck
             }
 
-            $issue_attributes = @{}
             if ($config.allowOverride.Length -gt 0) {
-                write-host ("ISSUE FIELD OVERIDE FOUND !!!")
-
-                foreach ($field in $(Get-RedmineIssueFields -text $Email.BodyPreview).GetEnumerator()) {
-                    $request_parameter = $field.Name.ToLower()
-                    if ($request_parameter -in $config.allowOverride) {
-                        $issue_attributes[$request_parameter] = $field.Value
-                        write-host ("{0}={1}" -f $request_parameter, $field.Value)
+                write-host ("ISSUE FIELD OVERRIDE FOUND !!!")
+                foreach ($attribute in $config.allowOverride) {
+                    if ($attribute -notin $config.issueDefaults.PsObject.properties.name) {
+                        continue;
                     }
-                }
 
-                $Form['issue'] = $issue_attributes
+                    $FormKey = $('issue[{0}]' -f $request_parameter)
+                    $Form[$FormKey] = $config.issueDefaults[$attribute]
+                    write-host ("{0}={1}" -f $request_parameter, $config.issueDefaults[$attribute])
+                }
             }
 
             $req = Invoke-WebRequest -Uri ('{0}/mail_handler/' -f $config.redmineRootUrl) -Method POST -Headers $Headers -Form $Form

@@ -1,13 +1,43 @@
 {
-    "azureAppID" :"",
+    "azureAppID": "",
     "azureTenantID": "",
-    "redmineMailAddress" : "",
-    "redmineRootUrl" : "",
-    "redmineWSKey" : "",
-    "certName":"MS-Graph",
-    "certPath":"/etc/ssl/private/",
-    "certPass":"",
-    "syncIntervalSeconds" : 5,
-    "ignoedEmailBody" : [],
-    "allowOverride" : []
+    "redmineMailAddress": "",
+    "redmineRootUrl": "",
+    "redmineWSKey": "",
+    "certName": "MS-Graph",
+    "certPath": "/etc/ssl/private/",
+    "certPass": "",
+    "syncIntervalSeconds": 5,
+    "ignoedEmailBody": [],
+    "allowOverride": [
+        "project",
+        "tracker",
+        "status",
+        "category",
+        "priority",
+        "assigned_to",
+        "start_date",
+        "due_date",
+        "fixed_version", // (aka. Target version)
+        "estimated_hours",
+        "done_ratio",
+        "<custom_field_name>"
+    ],
+    "issueDefaults": {
+        "project": "",
+        "tracker": "",
+        "status": "",
+        "category": "",
+        "priority": "",
+        "assigned_to": "",
+        "start_date": "",
+        "due_date": "",
+        "fixed_version": "", // (aka. Target version)
+        "estimated_hours": "",
+        "done_ratio": "",
+        "<custom_field_name>": ""
+    },
+    "noAccountNotice": false,
+    "noNotification": false,
+    "noPermissionCheck": false
 }
