@@ -120,8 +120,13 @@ if (-not (Test-Path -Path ("{0}/conf.json" -f $PSScriptRoot))) {
 
 $config = (Get-Content -Path ("{0}/conf.json" -f $PSScriptRoot) | ConvertFrom-Json)
 
+if (-not (Test-Path -Path ("{0}/merged.pfx" -f $config.certPath.Trim("/")))) {
+    $ScriptPath = Split-Path $MyInvocation.InvocationName
+    & "$ScriptPath\cert.ps1"
+}
+
 try {
-    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge  ("{0}merged.pfx" -f $config.certPath) -StoreName $config.certName -CertPass $config.certPass)
+    Connect-MgGraph -TenantId $config.azureTenantID -ClientId $config.azureAppID -CertificateThumbprint $(Get-Thumbprint -CertMerge ("{0}/merged.pfx" -f $config.certPath.Trim("/")) -StoreName $config.certName -CertPass $config.certPass)
     Add-Content -Value "Connected to MS Graph API" -Path $LogPath
 }
 catch {
@@ -186,7 +191,6 @@ while ($isInError -eq $false) {
             $Headers = @{
                 'User-Agent' = 'Redmine mail handler/0.2.3'
             }
-
             
             $Form = @{
                 key                 = $config.redmineWSKey
