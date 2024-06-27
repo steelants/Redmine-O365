@@ -1,3 +1,5 @@
+#https://github.com/redmine/redmine/blob/master/extra/mail_handler/rdm-mailhandler.rb
+
 function Get-FormatedEmailForHandler {
     param (
         [Parameter(Mandatory = $true)]
@@ -163,11 +165,13 @@ while ($isInError -eq $false) {
         #     continue;
         # }
 
-        $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
-        if ([string]::IsNullOrEmpty($RedmineIssueID)) {
-            Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
-            Add-Content -Value ("MS - Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
-            continue;
+        if ('project' -notin $config.issueDefaults.PsObject.properties.name) { #Handle filtrationif default project is not configured to speed up the process
+            $RedmineIssueID = [regex]::Match($Email.Subject, "(?<=\#).+?(?=\])").Value
+            if ([string]::IsNullOrEmpty($RedmineIssueID)) {
+                Move-MgUserMessage -UserId $config.redmineMailAddress -MessageId $Email.Id -DestinationId $ErrorFolderID
+                Add-Content -Value ("MS - Unable to pase Eamil with subject: {0}" -f $Email.Subject) -Path $LogPath
+                continue;
+            }
         }
 
         $notAlowedBodyContent = $false
@@ -208,9 +212,9 @@ while ($isInError -eq $false) {
                         continue;
                     }
 
-                    $FormKey = $('issue[{0}]' -f $request_parameter)
+                    $FormKey = $('issue[{0}]' -f $attribute)
                     $Form[$FormKey] = $config.issueDefaults[$attribute]
-                    write-host ("{0}={1}" -f $request_parameter, $config.issueDefaults[$attribute])
+                    write-host ("{0}={1}" -f $attribute, $config.issueDefaults.$attribute)
                 }
             }
 
